@@ -12,6 +12,8 @@ or set as a Streamlit secret when deployed. Optionally set APP_PASSWORD as
 a Streamlit secret to gate the app behind a shared passcode when hosted
 publicly — without it, no gate is shown (e.g. local dev).
 """
+import os
+
 import chromadb
 import streamlit as st
 import anthropic
@@ -20,6 +22,12 @@ from dotenv import load_dotenv
 from ingest import build_index
 
 load_dotenv()
+
+
+def get_secret(name):
+    # Local dev: .env / shell env. Deployed: Streamlit secrets aren't
+    # mirrored into os.environ automatically, so check both explicitly.
+    return os.environ.get(name) or st.secrets.get(name)
 
 DB_DIR = "chroma_db"
 COLLECTION_NAME = "jstreet"
@@ -39,7 +47,7 @@ def check_password():
     No-op (returns True immediately) when APP_PASSWORD isn't set, so local
     dev is never blocked — only a public deployment needs the gate.
     """
-    app_password = st.secrets.get("APP_PASSWORD")
+    app_password = get_secret("APP_PASSWORD")
     if not app_password:
         return True
 
@@ -75,7 +83,7 @@ def get_collection():
 
 @st.cache_resource
 def get_claude_client():
-    return anthropic.Anthropic()
+    return anthropic.Anthropic(api_key=get_secret("ANTHROPIC_API_KEY"))
 
 
 def retrieve(question, collection, k=TOP_K):
