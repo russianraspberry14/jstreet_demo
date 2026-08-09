@@ -1,15 +1,3 @@
-"""
-Build the local vector store for the J Street knowledge assistant.
-
-Reads every .txt/.pdf file in jstreet_corpus/, splits each into overlapping
-paragraph-based chunks, and loads them into a local Chroma collection.
-Embeddings are computed locally by Chroma's default sentence-transformer
-model (all-MiniLM-L6-v2, downloaded automatically on first run) — no
-embedding API key needed.
-
-Run this once after adding or editing corpus files:
-    python ingest.py
-"""
 import os
 import re
 
@@ -20,8 +8,7 @@ CORPUS_DIR = "jstreet_corpus"
 DB_DIR = "chroma_db"
 COLLECTION_NAME = "jstreet"
 
-# Rough character budget per chunk, with a bit of overlap so a fact that
-# falls near a paragraph boundary still shows up whole in one chunk.
+# will overlap so the context is not lost
 CHUNK_CHARS = 1000
 CHUNK_OVERLAP_CHARS = 150
 
@@ -37,13 +24,27 @@ def load_pdf(path):
 
 
 def chunk_text(text):
-    # Split on blank lines first so we never cut a sentence in half, then
-    # regroup paragraphs into ~CHUNK_CHARS chunks.
+    # Split on blank lines first so we never cut a sentence in half, then regroup paragraphs into ~CHUNK_CHARS chunks.
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+    # A "paragraph" bigger than a whole chunk (e.g. a name directory with no
+    # blank lines between entries) would otherwise become one oversized chunk
+    # whose embedding is diluted across everything in it. Break those up by
+    # line first so they still get grouped into normal-sized chunks below.
+    pieces = []
+    for para in paragraphs:
+        if len(para) <= CHUNK_CHARS:
+            pieces.append(para)
+        else:
+            lines = [l.strip() for l in para.split("\n") if l.strip()]
+            if len(lines) > 1:
+                pieces.extend(lines)
+            else:
+                pieces.extend(para[i:i + CHUNK_CHARS] for i in range(0, len(para), CHUNK_CHARS))
 
     chunks = []
     current = ""
-    for para in paragraphs:
+    for para in pieces:
         if current and len(current) + len(para) > CHUNK_CHARS:
             chunks.append(current.strip())
             # carry the tail of the previous chunk forward for continuity
@@ -56,11 +57,6 @@ def chunk_text(text):
 
 
 def build_index(client):
-    """(Re)build the collection from jstreet_corpus/ and return it.
-
-    Also called from app.py on cold start, so a hosted deployment doesn't
-    need a separate ingest step — the first request builds the index.
-    """
     try:
         client.delete_collection(COLLECTION_NAME)
     except Exception:
@@ -94,7 +90,7 @@ def main():
     client = chromadb.PersistentClient(path=DB_DIR)
     _, n_chunks, n_files = build_index(client)
     if n_chunks == 0:
-        print("No chunks found — check that jstreet_corpus/ has .txt or .pdf files.")
+        print("No chunks found!")
     else:
         print(f"Indexed {n_chunks} chunks from {n_files} files into {DB_DIR}/")
 

@@ -1,17 +1,3 @@
-"""
-J Street Knowledge Assistant — RAG demo.
-
-Retrieves relevant chunks from the local Chroma vector store built by
-ingest.py, then asks Claude to answer using only those chunks, citing which
-ones it used. Run with:
-    streamlit run app.py
-
-Requires ANTHROPIC_API_KEY, either exported in the shell, set in a local
-.env file (loaded automatically below, never committed — see .gitignore),
-or set as a Streamlit secret when deployed. Optionally set APP_PASSWORD as
-a Streamlit secret to gate the app behind a shared passcode when hosted
-publicly — without it, no gate is shown (e.g. local dev).
-"""
 import os
 
 import chromadb
@@ -23,10 +9,8 @@ from ingest import build_index
 
 load_dotenv()
 
-
+# Streamlit api key access: https://docs.streamlit.io/develop/concepts/connections/secrets-management
 def get_secret(name):
-    # Local dev: .env / shell env. Deployed: Streamlit secrets aren't
-    # mirrored into os.environ automatically, so check both explicitly.
     return os.environ.get(name) or st.secrets.get(name)
 
 DB_DIR = "chroma_db"
@@ -34,23 +18,19 @@ COLLECTION_NAME = "jstreet"
 MODEL = "claude-opus-5"
 TOP_K = 4
 
-SYSTEM_PROMPT = """You are a research assistant answering questions about J Street \
-using only the numbered context chunks provided with each question. Cite the \
-chunk number(s) you relied on in brackets, like [1] or [1][3]. If the answer \
-isn't in the provided context, say so plainly instead of guessing or using \
+SYSTEM_PROMPT = """You are a research assistant answering questions about J Street 
+using only the numbered context chunks provided with each question. Cite the 
+chunk number(s) you relied on in brackets, like [1] or [1][3]. If the answer 
+isn't in the provided context, say so plainly instead of guessing or using 
 outside knowledge."""
 
 
 def check_password():
-    """Gate the app behind a shared passcode if APP_PASSWORD is configured.
-
-    No-op (returns True immediately) when APP_PASSWORD isn't set, so local
-    dev is never blocked — only a public deployment needs the gate.
-    """
+    # adding a password for shawn:  
     app_password = get_secret("APP_PASSWORD")
     if not app_password:
         return True
-
+    # https://docs.streamlit.io/develop/api-reference/caching-and-state/st.session_state
     def password_entered():
         if st.session_state.get("password") == app_password:
             st.session_state["password_correct"] = True
@@ -104,7 +84,7 @@ def build_context(retrieved):
 st.set_page_config(page_title="J Street Knowledge Assistant", page_icon="🔎")
 st.title("J Street Knowledge Assistant")
 st.caption(
-    "A retrieval-augmented POC that answers questions using J Street's own "
+    "A retrieval-augmented personal assistant that answers questions using J Street's own "
     "public site content — mission, policy positions, FAQ, staff, and more."
 )
 
